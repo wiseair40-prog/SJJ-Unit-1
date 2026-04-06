@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SJJ U1 — Historical Data Explorer</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+body { background: #f5f7fa; color: #1a1a2e; padding: 20px; min-height: 100vh; }
+.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.title { font-size: 22px; font-weight: 700; color: #1a1a2e; }
+.subtitle { font-size: 12px; color: #666; margin-top: 4px; }
+
+.fix-banner { background: #fff7ed; border: 2px solid #f97316; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
+.fix-banner h3 { color: #c2410c; font-size: 14px; margin-bottom: 10px; }
+.fix-banner ol { padding-left: 20px; font-size: 13px; color: #7c2d12; line-height: 2.4; }
+.steps-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.fix-step { background: #fff; border: 1px solid #fed7aa; border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 600; color: #ea580c; }
+.btn-retry { background: #f97316; color: #fff; border: none; border-radius: 8px; padding: 9px 22px; font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 12px; }
+.btn-retry:hover { opacity: .85; }
+.status-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.status-chip { font-size: 11px; padding: 3px 10px; border-radius: 12px; font-weight: 600; }
+.chip-ok    { background: #f0fdf4; color: #22c55e; }
+.chip-err   { background: #fef2f2; color: #ef4444; }
+.chip-empty { background: #fefce8; color: #ca8a04; }
+
+.section-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 1px; margin: 14px 0 7px; }
+.sheet-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.stab { padding: 6px 14px; border-radius: 20px; border: 2px solid #0ea5e9; font-size: 12px; font-weight: 600; cursor: pointer; background: #0ea5e9; color: #fff; transition: all .2s; }
+.stab.off { background: transparent; color: #0ea5e9; }
+.stab.failed { border-color: #ef4444 !important; background: #fef2f2 !important; color: #ef4444 !important; cursor: default; }
+
+.cards { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.card { background: #fff; border-radius: 12px; padding: 14px 16px; flex: 1; min-width: 130px; box-shadow: 0 1px 4px rgba(0,0,0,.08); border: 1px solid #e8eaf0; border-top: 3px solid #0ea5e9; }
+.card .lbl { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: .4px; line-height: 1.4; }
+.card .val { font-size: 17px; font-weight: 700; color: #1a1a2e; margin: 5px 0 2px; }
+.card .rng { font-size: 10px; color: #bbb; }
+
+.fbox { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.08); border: 1px solid #e8eaf0; }
+.frow { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+.frow:last-child { margin-bottom: 0; }
+.fg label { font-size: 11px; color: #888; display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+.fg input, .fg select { background: #f5f7fa; border: 1px solid #dde1ec; color: #1a1a2e; padding: 7px 12px; border-radius: 8px; font-size: 13px; outline: none; }
+.fg input:focus, .fg select:focus { border-color: #0ea5e9; background: #fff; }
+.divider { width: 100%; height: 1px; background: #eef0f6; margin: 12px 0; }
+.btn { padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: opacity .2s; }
+.btn:hover { opacity: .85; }
+.btn-primary { background: #0ea5e9; color: #fff; }
+.btn-outline  { background: transparent; border: 1px solid #ccc; color: #666; }
+.btn-success  { background: #22c55e; color: #fff; }
+
+.params { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.pbtn { padding: 5px 14px; border-radius: 20px; border: 2px solid; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .2s; }
+
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.cbox { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); border: 1px solid #e8eaf0; }
+.cbox.full { grid-column: 1 / -1; }
+.ctitle { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #444; }
+canvas { max-height: 220px; }
+
+.tbox { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); border: 1px solid #e8eaf0; }
+.ttitle { font-size: 13px; font-weight: 600; color: #444; }
+.tscroll { overflow-x: auto; margin-top: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 1100px; }
+th { background: #f0f9ff; color: #0369a1; padding: 9px 10px; text-align: left; border-bottom: 2px solid #bae6fd; white-space: nowrap; font-weight: 600; }
+td { padding: 7px 10px; border-bottom: 1px solid #f0f2f8; color: #333; white-space: nowrap; }
+tr:hover td { background: #f0f9ff; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+.badge-apr { background:#fff7ed; color:#f97316; }
+.badge-may { background:#fef2f2; color:#ef4444; }
+.badge-jun { background:#f0fdf4; color:#22c55e; }
+.badge-jul { background:#fdf4ff; color:#a855f7; }
+.badge-aug { background:#eff6ff; color:#3b82f6; }
+.badge-sep { background:#fff7ed; color:#f59e0b; }
+.badge-oct { background:#fef2f2; color:#dc2626; }
+.badge-nov { background:#f0fdf4; color:#16a34a; }
+.badge-dec { background:#eff6ff; color:#1d4ed8; }
+.badge-def { background:#f1f5f9; color:#64748b; }
+.loading { text-align: center; padding: 40px; color: #999; font-size: 14px; }
+.progress-bar  { background: #e0f2fe; border-radius: 8px; height: 6px; margin: 8px 0; overflow: hidden; }
+.progress-fill { background: #0ea5e9; height: 100%; border-radius: 8px; transition: width .3s; }
+.afl { font-size: 11px; color: #f59e0b; margin-top: 10px; }
+@media(max-width:768px){ .charts{ grid-template-columns:1fr } .cbox.full{ grid-column:1 } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="title">🏭 SJJ U1 — Historical Data Explorer</div>
+    <div class="subtitle">April 2025 – December 2025 · Power · Flow · Pressure · Dew Point · Add new months in ALL_SHEETS config</div>
+  </div>
+  <span id="sync" style="font-size:12px;font-weight:600;color:#f59e0b">● Connecting...</span>
+</div>
+
+<!-- ERROR BANNER -->
+<div class="fix-banner" id="fixBanner" style="display:none">
+  <h3 id="bannerTitle">⚠️ Could not load data from Google Sheets</h3>
+  <ol>
+    <li>Open your Google Sheet: <strong>SJJ U1</strong></li>
+    <li>Click <strong>Share</strong> (top-right)</li>
+    <li>Click <strong>"Change to anyone with the link"</strong></li>
+    <li>Set role to <strong>Viewer</strong> and click <strong>Done</strong></li>
+    <li>Come back here and click <strong>Retry</strong></li>
+  </ol>
+  <div class="steps-row">
+    <div class="fix-step">① Open Sheet</div>
+    <div class="fix-step">② Share</div>
+    <div class="fix-step">③ Anyone with link</div>
+    <div class="fix-step">④ Viewer</div>
+    <div class="fix-step">⑤ Retry ↓</div>
+  </div>
+  <br>
+  <button class="btn-retry" onclick="doFetch()">🔄 Retry</button>
+  <div class="status-row" id="chipRow"></div>
+</div>
+
+<!-- Sheet Tabs -->
+<div class="section-label">📅 Monthly Sheets</div>
+<div class="sheet-tabs" id="sheetTabs"></div>
+
+<!-- Summary Cards -->
+<div class="section-label">📈 Key Averages</div>
+<div class="cards" id="cards"></div>
+
+<!-- Filters -->
+<div class="fbox">
+  <div class="frow">
+    <div class="fg"><label>📅 Date From</label><input type="date" id="from"></div>
+    <div class="fg"><label>📅 Date To</label><input type="date" id="to"></div>
+    <div class="fg">
+      <label>⚡ Quick Range</label>
+      <select id="qr" onchange="applyQuickRange()">
+        <option value="">Custom</option>
+        <option value="30">Last 30 Days</option>
+        <option value="90">Last 90 Days</option>
+        <option value="180">Last 6 Months</option>
+        <option value="all" selected>All Time</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>📊 Aggregation</label>
+      <select id="agg">
+        <option value="raw">Raw Data</option>
+        <option value="daily">Daily Avg</option>
+        <option value="monthly" selected>Monthly Avg</option>
+      </select>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div class="frow">
+    <div class="fg">
+      <label>🔍 Filter Column</label>
+      <select id="fcol">
+        <option value="">None</option>
+        <option value="Power">Power</option>
+        <option value="Total_Generated_Flow">Total Generated Flow</option>
+        <option value="U1_UAH_Flow">U1-UAH Flow</option>
+        <option value="U1_Murata_Hall">U1-Murata Hall</option>
+        <option value="Sub_Header_Flow_Spg">Sub Header Flow - Spg</option>
+        <option value="Blowroom_to_Preparatory">Blowroom to Preparatory</option>
+        <option value="Kaesar_Outlet_Pressure">Kaesar Outlet Pressure</option>
+        <option value="After_Oil_Sep_Pressure">After Oil Separator Pressure</option>
+        <option value="Dew_Point">Dew Point</option>
+        <option value="PC_Unit_Flow">PC Unit Flow</option>
+        <option value="PC_Pressure">PC Pressure</option>
+        <option value="PC_Enterance">PC Enterance</option>
+        <option value="PC_LinkConer">PC LinkConer</option>
+        <option value="PC_Spinning">PC Spinning</option>
+        <option value="PC_Blowroom_Preparatory">PC Blowroom and Preparatory</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Condition</label>
+      <select id="fop">
+        <option value="gt">greater than</option>
+        <option value="lt">less than</option>
+        <option value="gte">greater or equal</option>
+        <option value="lte">less or equal</option>
+        <option value="eq">equal to</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Value</label>
+      <input type="number" id="fval" placeholder="e.g. 100" step="any" style="width:110px">
+    </div>
+    <div class="fg" style="display:flex;gap:8px;align-items:flex-end">
+      <button class="btn btn-primary" onclick="applyFilters()">Apply</button>
+      <button class="btn btn-outline" onclick="doReset()">Reset</button>
+      <button class="btn btn-success" onclick="doExport()">⬇ CSV</button>
+    </div>
+  </div>
+  <div class="afl" id="afl"></div>
+</div>
+
+<!-- Param toggles -->
+<div class="section-label">🔘 Toggle Parameters</div>
+<div class="params" id="params"></div>
+
+<!-- Charts -->
+<div class="charts">
+  <div class="cbox full"><div class="ctitle">Flow Trends</div><canvas id="flowChart"></canvas></div>
+  <div class="cbox"><div class="ctitle">Pressure — Kaesar Outlet &amp; After Oil Separator</div><canvas id="pressChart"></canvas></div>
+  <div class="cbox"><div class="ctitle">Dew Point</div><canvas id="dewChart"></canvas></div>
+  <div class="cbox full"><div class="ctitle">Power</div><canvas id="powerChart"></canvas></div>
+  <div class="cbox full"><div class="ctitle">PC Section — Unit Flow, Pressure &amp; Zones</div><canvas id="pcChart"></canvas></div>
+</div>
+
+<!-- Data Table -->
+<div class="tbox">
+  <span class="ttitle" id="ttitle">Data Table</span>
+  <div class="tscroll"><div id="table"><div class="loading">⏳ Waiting for data...</div></div></div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════════════
+//  CONFIG
+//  ➕ To add a new month: copy gid= from the tab URL and add a line.
+// ═══════════════════════════════════════════════════════════════════
+var SHEET_ID = '1LtYhZQ1aqgisevqI0aI4OYWXn4Xsus6MKyPbl4WO-rU';
+
+var ALL_SHEETS = [
+  { name:'APR 2025', gid:'445433103'  },
+  { name:'MAY 2025', gid:'419236981'  },
+  { name:'JUN 2025', gid:'585725225'  },
+  { name:'JUL 2025', gid:'1591719246' },
+  { name:'AUG 2025', gid:'829378769'  },
+  { name:'SEP 2025', gid:'1290484217' },
+  { name:'OCT 2025', gid:'1581923995' },
+  { name:'NOV 2025', gid:'777101920'  },
+  { name:'DEC 2025', gid:'19524325'   }
+  // ➕ ADD NEW MONTHS HERE:
+  // { name:'JAN 2026', gid:'PASTE_GID_HERE' },
+];
+
+// ═══════════════════════════════════════════════════════════════════
+//  COLUMN DEFINITIONS
+//  key       = internal key used in data objects
+//  col       = EXACT column header from the sheet (row 1)
+//  This sheet has a SINGLE header row — data starts from row 2.
+// ═══════════════════════════════════════════════════════════════════
+var COL_DEFS = [
+  // key                        col header (exact match)                    label                         unit    color
+  { key:'Power',                col:'Power',                                label:'Power',                unit:'kW',  color:'#ef4444', group:'power'    },
+  { key:'Total_Generated_Flow', col:'Total Generated Flow',                 label:'Total Gen. Flow',      unit:'CFM', color:'#0ea5e9', group:'flow'     },
+  { key:'U1_UAH_Flow',          col:'U1-UAH Flow',                          label:'U1-UAH Flow',          unit:'CFM', color:'#3b82f6', group:'flow'     },
+  { key:'U1_Murata_Hall',       col:'U1-Murata Hall',                       label:'U1-Murata Hall',       unit:'CFM', color:'#6366f1', group:'flow'     },
+  { key:'Sub_Header_Flow_Spg',  col:'Sub Header Flow - Spg',                label:'Sub Header (Spg)',     unit:'CFM', color:'#8b5cf6', group:'flow'     },
+  { key:'Blowroom_to_Prep',     col:'Blowroom to Preparatory',              label:'Blowroom to Prep',     unit:'CFM', color:'#a855f7', group:'flow'     },
+  { key:'Kaesar_Outlet_Pres',   col:'kaesar outlet Pressure',               label:'Kaesar Outlet Pres',   unit:'bar', color:'#f97316', group:'pressure' },
+  { key:'After_Oil_Sep_Pres',   col:'after oil seperator Pressure',         label:'After Oil Sep Pres',   unit:'bar', color:'#fb923c', group:'pressure' },
+  { key:'Dew_Point',            col:'Dew Point',                            label:'Dew Point',            unit:'°C',  color:'#22d3ee', group:'dew'      },
+  { key:'PC_Unit_Flow',         col:'PC Unit Flow',                         label:'PC Unit Flow',         unit:'CFM', color:'#10b981', group:'pc'       },
+  { key:'PC_Pressure',          col:'PC Pressure',                          label:'PC Pressure',          unit:'bar', color:'#059669', group:'pc'       },
+  { key:'PC_Enterance',         col:'PC Enterance',                         label:'PC Enterance',         unit:'CFM', color:'#34d399', group:'pc'       },
+  { key:'PC_LinkConer',         col:'PC  LinkConer',                        label:'PC LinkConer',         unit:'CFM', color:'#6ee7b7', group:'pc'       },
+  { key:'PC_Spinning',          col:'PC Spinning',                          label:'PC Spinning',          unit:'CFM', color:'#a7f3d0', group:'pc'       },
+  { key:'PC_Blowroom_Prep',     col:'PC Blowroom and Preparatory',          label:'PC Blowroom & Prep',   unit:'CFM', color:'#d1fae5', group:'pc'       }
+];
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════
+var activeParams = {};
+COL_DEFS.forEach(function(c){ activeParams[c.key] = true; });
+var activeSheets = {};
+ALL_SHEETS.forEach(function(s){ activeSheets[s.name] = true; });
+var sheetStat = {};
+var allData = [], filteredData = [];
+var flowChart, pressChart, dewChart, powerChart, pcChart;
+
+// ═══════════════════════════════════════════════════════════════════
+//  TIMESTAMP PARSER
+// ═══════════════════════════════════════════════════════════════════
+function parseTS(str) {
+  if (!str) return null;
+  str = String(str).trim();
+  if (!str) return null;
+  // M/D/YY HH:MM  (e.g. 4/13/25 11:51)
+  var m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m) {
+    var yr = parseInt(m[3]); if (yr < 100) yr += 2000;
+    return new Date(yr, +m[1]-1, +m[2], +m[4], +m[5], +(m[6]||0));
+  }
+  // DD-MM-YYYY HH:MM
+  var m2 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[,\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  if (m2) return new Date(+m2[3], +m2[2]-1, +m2[1], +m2[4], +m2[5], +(m2[6]||0));
+  // YYYY-MM-DDTHH:MM
+  var m3 = str.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (m3) return new Date(+m3[1], +m3[2]-1, +m3[3], +m3[4], +m3[5]);
+  var d = new Date(str);
+  return isNaN(d) ? null : d;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CSV PARSER — single header row (row 1 = headers, row 2+ = data)
+// ═══════════════════════════════════════════════════════════════════
+function splitLine(line) {
+  var res = [], cur = '', inQ = false;
+  for (var i = 0; i < line.length; i++) {
+    var c = line[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { res.push(cur); cur = ''; }
+    else { cur += c; }
+  }
+  res.push(cur);
+  return res.map(function(v){ return v.replace(/^"|"$/g,'').trim(); });
+}
+
+function parseCSV(csv, sheetName) {
+  var lines = csv.replace(/\r/g,'').split('\n');
+  if (lines.length < 2) return [];
+
+  // Row 0 = headers
+  var headers = splitLine(lines[0]);
+
+  // Build a map: col_header -> index
+  var colIdx = {};
+  headers.forEach(function(h, i){ colIdx[h.trim()] = i; });
+
+  // Find Timestamp column index
+  var tsIdx = colIdx['Timestamp'];
+  if (tsIdx === undefined) {
+    // Try first column
+    tsIdx = 0;
+  }
+
+  // Find value column indices using COL_DEFS
+  var colMap = {}; // key -> index
+  COL_DEFS.forEach(function(cd){
+    var idx = colIdx[cd.col];
+    if (idx !== undefined) {
+      colMap[cd.key] = idx;
+    } else {
+      // fuzzy: try trimmed lowercase match
+      headers.forEach(function(h, i){
+        if (h.trim().toLowerCase() === cd.col.toLowerCase()) colMap[cd.key] = i;
+      });
+    }
+  });
+
+  var rows = [];
+  for (var i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    var cells = splitLine(lines[i]);
+    var tsStr = cells[tsIdx] || '';
+    if (!tsStr.trim()) continue;
+    var ts = parseTS(tsStr);
+    if (!ts || isNaN(ts)) continue;
+
+    var obj = { _source: sheetName, _ts: ts };
+    COL_DEFS.forEach(function(cd){
+      var idx = colMap[cd.key];
+      if (idx === undefined) { obj[cd.key] = null; return; }
+      var raw = cells[idx] !== undefined ? cells[idx] : '';
+      var n = parseFloat(raw);
+      obj[cd.key] = isNaN(n) ? null : n;
+    });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  FETCH — gviz/tq CSV output (CORS-safe for GitHub Pages)
+//  headers=1 → skip 1 header row, return data only
+//  We prepend a dummy header line so parseCSV works correctly.
+// ═══════════════════════════════════════════════════════════════════
+function fetchSheet(sheet) {
+  // Primary: gviz tq with CSV output (CORS-safe)
+  var gvizUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+    '/gviz/tq?tqx=out:csv&gid=' + sheet.gid +
+    '&headers=1&tq=' + encodeURIComponent('select *') +
+    '&_=' + Date.now();
+
+  return fetch(gvizUrl, { mode:'cors', cache:'no-store' })
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+    .then(function(csv){
+      if (!csv || csv.trim().charAt(0) === '<') throw new Error('PERMISSION_DENIED');
+      // gviz with headers=1 returns data rows only (headers stripped).
+      // Re-inject a header row built from COL_DEFS col names + Timestamp
+      var fakeHeader = 'Timestamp,' + COL_DEFS.map(function(c){ return '"'+c.col+'"'; }).join(',');
+      // But actually gviz may return headers — detect:
+      // If first cell of first line looks like a timestamp, headers were stripped.
+      // If it looks like text, headers are included.
+      var firstLine = csv.split('\n')[0] || '';
+      var firstCell = splitLine(firstLine)[0] || '';
+      var hasHeaders = isNaN(parseFloat(firstCell)) && !parseTS(firstCell);
+
+      var finalCsv = hasHeaders ? csv : (fakeHeader + '\n' + csv);
+      var rows = parseCSV(finalCsv, sheet.name);
+      sheetStat[sheet.name] = rows.length > 0 ? 'ok' : 'empty';
+      return rows;
+    })
+    .catch(function(err){
+      // Fallback: direct CSV export
+      var csvUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID +
+        '/export?format=csv&gid=' + sheet.gid + '&_=' + Date.now();
+      return fetch(csvUrl, { cache:'no-store' })
+        .then(function(r2){ if(!r2.ok) throw new Error('HTTP '+r2.status); return r2.text(); })
+        .then(function(csv2){
+          if (!csv2 || csv2.trim().charAt(0) === '<') throw new Error('PERMISSION_DENIED');
+          var rows = parseCSV(csv2, sheet.name);
+          sheetStat[sheet.name] = rows.length > 0 ? 'ok' : 'empty';
+          return rows;
+        })
+        .catch(function(err2){
+          sheetStat[sheet.name] = 'fail:' + err2.message;
+          console.warn('['+sheet.name+']', err2.message);
+          return [];
+        });
+    });
+}
+
+function doFetch() {
+  document.getElementById('sync').textContent = '● Fetching...';
+  document.getElementById('sync').style.color = '#f59e0b';
+  document.getElementById('fixBanner').style.display = 'none';
+  document.getElementById('table').innerHTML =
+    '<div class="loading">⏳ Connecting to Google Sheets…' +
+    '<div style="font-size:11px;color:#aaa;margin-top:10px" id="progLabel">Starting…</div>' +
+    '<div class="progress-bar"><div class="progress-fill" id="progFill" style="width:0%"></div></div></div>';
+
+  allData = []; sheetStat = {};
+  var total = ALL_SHEETS.length, done = 0;
+
+  var promises = ALL_SHEETS.map(function(s){
+    return fetchSheet(s).then(function(rows){
+      done++;
+      var lbl = document.getElementById('progLabel');
+      var fill = document.getElementById('progFill');
+      if (lbl) lbl.textContent = 'Loaded: ' + s.name + ' (' + rows.length + ' rows)';
+      if (fill) fill.style.width = Math.round(done/total*100) + '%';
+      return { name:s.name, rows:rows };
+    });
+  });
+
+  Promise.all(promises).then(function(results){
+    var seen = {};
+    results.forEach(function(r){
+      r.rows.forEach(function(row){
+        var k = row._source + '_' + (row._ts ? row._ts.getTime() : Math.random());
+        if (!seen[k]) { seen[k]=true; allData.push(row); }
+      });
+    });
+    allData.sort(function(a,b){ return (a._ts||0)-(b._ts||0); });
+
+    var fails = Object.keys(sheetStat).filter(function(k){ return sheetStat[k].startsWith('fail'); });
+    var oks   = Object.keys(sheetStat).filter(function(k){ return sheetStat[k]==='ok'; });
+
+    if (allData.length === 0) {
+      document.getElementById('fixBanner').style.display = 'block';
+      document.getElementById('bannerTitle').textContent =
+        '⚠️ No data loaded — ' + fails.length + ' sheet(s) failed. Make sheet public (steps below):';
+      renderChips();
+      document.getElementById('sync').textContent = '● Failed — no data';
+      document.getElementById('sync').style.color = '#ef4444';
+      document.getElementById('table').innerHTML =
+        '<div class="loading" style="color:#ef4444">❌ No data. Make your Google Sheet public — see orange banner above.</div>';
+    } else {
+      document.getElementById('sync').textContent =
+        '● Synced · ' + allData.length + ' rows · ' + oks.length + '/' + total + ' sheets OK';
+      document.getElementById('sync').style.color = fails.length===0 ? '#22c55e' : '#f59e0b';
+      if (fails.length > 0) {
+        document.getElementById('fixBanner').style.display = 'block';
+        document.getElementById('bannerTitle').textContent =
+          '⚠️ ' + fails.length + ' sheet(s) failed. Data may be partial.';
+        renderChips();
+      }
+    }
+    buildSheetTabs(); buildCards(); buildParamButtons(); applyFilters();
+  });
+}
+
+function renderChips() {
+  document.getElementById('chipRow').innerHTML = ALL_SHEETS.map(function(s){
+    var st = sheetStat[s.name]||'pending';
+    var cls = st==='ok'?'chip-ok':st.startsWith('fail')?'chip-err':'chip-empty';
+    var icon = st==='ok'?'✓ ':st.startsWith('fail')?'✗ ':'~ ';
+    return '<span class="status-chip '+cls+'">'+icon+s.name+'</span>';
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function fmtTS(ts) {
+  if (!ts) return '—';
+  var d = (ts instanceof Date) ? ts : new Date(ts);
+  if (isNaN(d)) return String(ts);
+  return d.getFullYear()+'-'+
+    String(d.getMonth()+1).padStart(2,'0')+'-'+
+    String(d.getDate()).padStart(2,'0')+' '+
+    String(d.getHours()).padStart(2,'0')+':'+
+    String(d.getMinutes()).padStart(2,'0');
+}
+function num(v){ var n=parseFloat(v); return isNaN(n)?null:n; }
+function badgeClass(s){
+  s=(s||'').toUpperCase();
+  if(s.includes('APR')) return 'badge-apr';
+  if(s.includes('MAY')) return 'badge-may';
+  if(s.includes('JUN')) return 'badge-jun';
+  if(s.includes('JUL')) return 'badge-jul';
+  if(s.includes('AUG')) return 'badge-aug';
+  if(s.includes('SEP')) return 'badge-sep';
+  if(s.includes('OCT')) return 'badge-oct';
+  if(s.includes('NOV')) return 'badge-nov';
+  if(s.includes('DEC')) return 'badge-dec';
+  return 'badge-def';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UI BUILDERS
+// ═══════════════════════════════════════════════════════════════════
+function buildSheetTabs(){
+  var div = document.getElementById('sheetTabs'); div.innerHTML='';
+  ALL_SHEETS.forEach(function(s){
+    var btn = document.createElement('button');
+    var failed = (sheetStat[s.name]||'').startsWith('fail');
+    btn.className = 'stab'+(activeSheets[s.name]?'':' off')+(failed?' failed':'');
+    btn.textContent = s.name+(failed?' ✗':'');
+    if (!failed) btn.onclick=(function(name,b){
+      return function(){ activeSheets[name]=!activeSheets[name]; b.classList.toggle('off'); applyFilters(); };
+    })(s.name,btn);
+    div.appendChild(btn);
+  });
+}
+
+function buildParamButtons(){
+  var div=document.getElementById('params'); div.innerHTML='';
+  COL_DEFS.forEach(function(p){
+    var btn=document.createElement('button');
+    btn.className='pbtn'; btn.textContent=p.label;
+    btn.style.cssText='border-color:'+p.color+';background:'+p.color+';color:#fff';
+    btn.onclick=(function(key,color,b){
+      return function(){
+        activeParams[key]=!activeParams[key];
+        b.style.background=activeParams[key]?color:'transparent';
+        b.style.color=activeParams[key]?'#fff':color;
+        renderAll(aggregate(filteredData));
+      };
+    })(p.key,p.color,btn);
+    div.appendChild(btn);
+  });
+}
+
+function buildCards(){
+  var div=document.getElementById('cards'); div.innerHTML='';
+  var defs=[
+    {key:'Power',                label:'Power',              unit:'kW'},
+    {key:'Total_Generated_Flow', label:'Total Gen. Flow',    unit:'CFM'},
+    {key:'U1_UAH_Flow',          label:'U1-UAH Flow',        unit:'CFM'},
+    {key:'Sub_Header_Flow_Spg',  label:'Sub Header (Spg)',   unit:'CFM'},
+    {key:'Kaesar_Outlet_Pres',   label:'Kaesar Outlet Pres', unit:'bar'},
+    {key:'After_Oil_Sep_Pres',   label:'After Oil Sep Pres', unit:'bar'},
+    {key:'Dew_Point',            label:'Dew Point',          unit:'°C'},
+    {key:'PC_Unit_Flow',         label:'PC Unit Flow',       unit:'CFM'},
+    {key:'PC_Pressure',          label:'PC Pressure',        unit:'bar'},
+  ];
+  defs.forEach(function(d){
+    var c=document.createElement('div'); c.className='card';
+    c.innerHTML='<div class="lbl">'+d.label+'</div>'+
+                '<div class="val" id="cv_'+d.key+'">—</div>'+
+                '<div class="rng" id="cr_'+d.key+'"></div>';
+    div.appendChild(c);
+  });
+  window._cardDefs=defs;
+}
+
+function updateCards(data){
+  if(!window._cardDefs) return;
+  window._cardDefs.forEach(function(d){
+    var vals=data.map(function(r){return num(r[d.key]);}).filter(function(v){return v!==null;});
+    var av=document.getElementById('cv_'+d.key), rg=document.getElementById('cr_'+d.key);
+    if(!av) return;
+    if(!vals.length){av.textContent='—';if(rg)rg.textContent='';return;}
+    var avg=vals.reduce(function(a,b){return a+b;},0)/vals.length;
+    av.textContent=avg.toFixed(2)+' '+d.unit;
+    if(rg) rg.textContent='Min '+Math.min.apply(null,vals).toFixed(2)+' · Max '+Math.max.apply(null,vals).toFixed(2);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  FILTER
+// ═══════════════════════════════════════════════════════════════════
+function applyFilters(){
+  var from=document.getElementById('from').value;
+  var to=document.getElementById('to').value;
+  var col=document.getElementById('fcol').value;
+  var op=document.getElementById('fop').value;
+  var val=parseFloat(document.getElementById('fval').value);
+  var actNames=Object.keys(activeSheets).filter(function(k){return activeSheets[k];});
+
+  filteredData=allData.filter(function(row){
+    if(actNames.length>0 && actNames.indexOf(row._source)<0) return false;
+    if(from||to){
+      var ts=row._ts; if(!ts) return false;
+      if(from && ts<new Date(from)) return false;
+      if(to   && ts>new Date(to+'T23:59:59')) return false;
+    }
+    if(col&&!isNaN(val)){
+      var rv=num(row[col]); if(rv===null) return false;
+      if(op==='gt' &&rv<=val)return false; if(op==='lt' &&rv>=val)return false;
+      if(op==='gte'&&rv< val)return false; if(op==='lte'&&rv> val)return false;
+      if(op==='eq' &&rv!==val)return false;
+    }
+    return true;
+  });
+
+  updateActiveLabel();
+  var d=aggregate(filteredData);
+  updateCards(d); renderAll(d); renderTable(d);
+}
+
+function updateActiveLabel(){
+  var parts=[];
+  var from=document.getElementById('from').value,to=document.getElementById('to').value;
+  if(from||to) parts.push('Date: '+(from||'…')+' → '+(to||'…'));
+  var col=document.getElementById('fcol').value,val=document.getElementById('fval').value;
+  var opL={gt:'>',lt:'<',gte:'>=',lte:'<=',eq:'='};
+  if(col&&val) parts.push(col+' '+opL[document.getElementById('fop').value]+' '+val);
+  document.getElementById('afl').textContent=parts.length?'🔍 '+parts.join(' | '):'';
+}
+
+function applyQuickRange(){
+  var v=document.getElementById('qr').value;
+  if(!v||v==='all'){
+    document.getElementById('from').value=''; document.getElementById('to').value='';
+    if(allData.length) applyFilters(); return;
+  }
+  var to=new Date(),fr=new Date(); fr.setDate(fr.getDate()-parseInt(v));
+  document.getElementById('to').value=to.toISOString().split('T')[0];
+  document.getElementById('from').value=fr.toISOString().split('T')[0];
+  if(allData.length) applyFilters();
+}
+
+function doReset(){
+  document.getElementById('qr').value='all'; document.getElementById('agg').value='monthly';
+  document.getElementById('fcol').value=''; document.getElementById('fval').value='';
+  document.getElementById('from').value=''; document.getElementById('to').value='';
+  document.getElementById('afl').textContent='';
+  ALL_SHEETS.forEach(function(s){activeSheets[s.name]=true;});
+  buildSheetTabs(); applyFilters();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  AGGREGATION
+// ═══════════════════════════════════════════════════════════════════
+var MONTH_ORDER={APR:3,MAY:4,JUN:5,JUL:6,AUG:7,SEP:8,OCT:9,NOV:10,DEC:11,JAN:0,FEB:1,MAR:2,MARCH:2,APRIL:3,JUNE:5,JULY:6};
+
+function aggregate(data){
+  var mode=document.getElementById('agg').value;
+  if(mode==='raw') return data;
+  var groups={};
+  data.forEach(function(row){
+    var ts=row._ts,key;
+    if(mode==='monthly'){
+      key=row._source||(ts?ts.getFullYear()+'-'+String(ts.getMonth()+1).padStart(2,'0'):'unknown');
+    } else {
+      if(!ts) return;
+      key=ts.getFullYear()+'-'+String(ts.getMonth()+1).padStart(2,'0')+'-'+String(ts.getDate()).padStart(2,'0');
+    }
+    if(!groups[key]) groups[key]=[];
+    groups[key].push(row);
+  });
+
+  var sortedKeys=Object.keys(groups).sort(function(a,b){
+    var ay=(a.match(/(\d{4})/)||[])[1], by=(b.match(/(\d{4})/)||[])[1];
+    if(ay&&by&&ay!==by) return parseInt(ay)-parseInt(by);
+    var au=a.toUpperCase(),bu=b.toUpperCase(),ai=-1,bi=-1;
+    Object.keys(MONTH_ORDER).forEach(function(k){
+      if(au.indexOf(k)>=0) ai=MONTH_ORDER[k];
+      if(bu.indexOf(k)>=0) bi=MONTH_ORDER[k];
+    });
+    if(ai>=0&&bi>=0) return ai-bi;
+    return a<b?-1:1;
+  });
+
+  return sortedKeys.map(function(k){
+    var rows=groups[k];
+    var avgRow={_source:rows[0]._source,_ts:rows[0]._ts,_label:k};
+    COL_DEFS.forEach(function(cd){
+      var vals=rows.map(function(r){return num(r[cd.key]);}).filter(function(v){return v!==null;});
+      avgRow[cd.key]=vals.length?vals.reduce(function(a,b){return a+b;},0)/vals.length:null;
+    });
+    return avgRow;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CHARTS
+// ═══════════════════════════════════════════════════════════════════
+function renderAll(data){
+  var labels=data.map(function(r){
+    if(r._label) return r._label;
+    return r._ts&&!isNaN(r._ts)?fmtTS(r._ts):String(r._source||'');
+  });
+
+  function mkDS(key,color,yAxis){
+    var cd=COL_DEFS.filter(function(c){return c.key===key;})[0];
+    return {
+      label:cd?cd.label:key,
+      data:data.map(function(r){return num(r[key]);}),
+      borderColor:color, backgroundColor:color+'33',
+      borderWidth:2, pointRadius:2, tension:0.3, yAxisID:yAxis
+    };
+  }
+  var xS={ticks:{color:'#999',maxTicksLimit:12},grid:{color:'#eee'}};
+  var yL={type:'linear',position:'left', ticks:{color:'#999'},grid:{color:'#eee'}};
+  var yR={type:'linear',position:'right',ticks:{color:'#999'},grid:{drawOnChartArea:false}};
+  function opts(sc){return{responsive:true,maintainAspectRatio:true,animation:false,
+    plugins:{legend:{labels:{color:'#555',font:{size:10}}}},scales:sc};}
+
+  // Flow Chart
+  if(flowChart){flowChart.destroy();flowChart=null;}
+  var fd=[];
+  if(activeParams.Total_Generated_Flow) fd.push(mkDS('Total_Generated_Flow','#0ea5e9','y'));
+  if(activeParams.U1_UAH_Flow)          fd.push(mkDS('U1_UAH_Flow',         '#3b82f6','y'));
+  if(activeParams.U1_Murata_Hall)       fd.push(mkDS('U1_Murata_Hall',      '#6366f1','y1'));
+  if(activeParams.Sub_Header_Flow_Spg)  fd.push(mkDS('Sub_Header_Flow_Spg', '#8b5cf6','y1'));
+  if(activeParams.Blowroom_to_Prep)     fd.push(mkDS('Blowroom_to_Prep',    '#a855f7','y1'));
+  flowChart=new Chart(document.getElementById('flowChart'),
+    {type:'line',data:{labels:labels,datasets:fd},options:opts({y:yL,y1:yR,x:xS})});
+
+  // Pressure Chart
+  if(pressChart){pressChart.destroy();pressChart=null;}
+  var pd=[];
+  if(activeParams.Kaesar_Outlet_Pres) pd.push(mkDS('Kaesar_Outlet_Pres','#f97316','y'));
+  if(activeParams.After_Oil_Sep_Pres) pd.push(mkDS('After_Oil_Sep_Pres','#fb923c','y1'));
+  pressChart=new Chart(document.getElementById('pressChart'),
+    {type:'line',data:{labels:labels,datasets:pd},options:opts({y:yL,y1:yR,x:xS})});
+
+  // Dew Point Chart
+  if(dewChart){dewChart.destroy();dewChart=null;}
+  var dd=[];
+  if(activeParams.Dew_Point) dd.push(mkDS('Dew_Point','#22d3ee','y'));
+  dewChart=new Chart(document.getElementById('dewChart'),
+    {type:'line',data:{labels:labels,datasets:dd},options:opts({y:yL,x:xS})});
+
+  // Power Chart
+  if(powerChart){powerChart.destroy();powerChart=null;}
+  var pwd=[];
+  if(activeParams.Power) pwd.push(mkDS('Power','#ef4444','y'));
+  powerChart=new Chart(document.getElementById('powerChart'),
+    {type:'line',data:{labels:labels,datasets:pwd},options:opts({y:yL,x:xS})});
+
+  // PC Chart
+  if(pcChart){pcChart.destroy();pcChart=null;}
+  var pcd=[];
+  if(activeParams.PC_Unit_Flow)      pcd.push(mkDS('PC_Unit_Flow',     '#10b981','y'));
+  if(activeParams.PC_Pressure)       pcd.push(mkDS('PC_Pressure',      '#059669','y1'));
+  if(activeParams.PC_Enterance)      pcd.push(mkDS('PC_Enterance',     '#34d399','y'));
+  if(activeParams.PC_LinkConer)      pcd.push(mkDS('PC_LinkConer',     '#6ee7b7','y'));
+  if(activeParams.PC_Spinning)       pcd.push(mkDS('PC_Spinning',      '#a7f3d0','y'));
+  if(activeParams.PC_Blowroom_Prep)  pcd.push(mkDS('PC_Blowroom_Prep', '#d1fae5','y'));
+  pcChart=new Chart(document.getElementById('pcChart'),
+    {type:'line',data:{labels:labels,datasets:pcd},options:opts({y:yL,y1:yR,x:xS})});
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TABLE
+// ═══════════════════════════════════════════════════════════════════
+function renderTable(data){
+  var show=data.slice(0,300);
+  document.getElementById('ttitle').textContent=
+    'Data — showing '+show.length+' of '+data.length+' records';
+  var html='<table><tr><th>Month</th><th>Timestamp</th>'+
+    COL_DEFS.map(function(cd){return'<th>'+cd.label+' ('+cd.unit+')</th>';}).join('')+'</tr>';
+  show.forEach(function(row){
+    var src=row._source||'';
+    html+='<tr><td><span class="badge '+badgeClass(src)+'">'+src+'</span></td>';
+    html+='<td>'+fmtTS(row._ts)+'</td>';
+    html+=COL_DEFS.map(function(cd){
+      var v=row[cd.key];
+      return'<td>'+(v!==null&&v!==undefined?(typeof v==='number'?v.toFixed(3):v):'—')+'</td>';
+    }).join('');
+    html+='</tr>';
+  });
+  document.getElementById('table').innerHTML=html+'</table>';
+}
+
+function doExport(){
+  var data=aggregate(filteredData);
+  var hdr=['Month','Timestamp'].concat(COL_DEFS.map(function(c){return c.label;}));
+  var csv=hdr.join(',')+'\n';
+  data.forEach(function(row){
+    var line=['"'+(row._source||'')+'"','"'+fmtTS(row._ts)+'"']
+      .concat(COL_DEFS.map(function(cd){
+        var v=row[cd.key]; return(v!==null&&v!==undefined)?String(v):'';
+      }));
+    csv+=line.join(',')+'\n';
+  });
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='sjj_u1_data.csv'; a.click();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════
+buildSheetTabs(); buildCards(); buildParamButtons(); doFetch();
+</script>
+</body>
+</html>
