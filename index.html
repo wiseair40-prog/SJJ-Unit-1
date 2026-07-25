@@ -186,7 +186,7 @@ tr:hover td { background: #f0f9ff; }
       <input type="number" id="fval" placeholder="e.g. 100" step="any" style="width:110px">
     </div>
     <div class="fg" style="display:flex;gap:8px;align-items:flex-end">
-      <button class="btn btn-primary" onclick="applyFilters()">Apply</button>
+      <button class="btn btn-primary" onclick="doFetch()">Apply</button>
       <button class="btn btn-outline" onclick="doReset()">Reset</button>
       <button class="btn btn-success" onclick="doExport()">⬇ CSV</button>
     </div>
@@ -222,19 +222,27 @@ tr:hover td { background: #f0f9ff; }
 // ═══════════════════════════════════════════════════════════════════
 var SHEET_ID = '1LtYhZQ1aqgisevqI0aI4OYWXn4Xsus6MKyPbl4WO-rU';
 
-var ALL_SHEETS = [
-  { name:'APR 2025', gid:'445433103'  },
-  { name:'MAY 2025', gid:'419236981'  },
-  { name:'JUN 2025', gid:'585725225'  },
-  { name:'JUL 2025', gid:'1591719246' },
-  { name:'AUG 2025', gid:'829378769'  },
-  { name:'SEP 2025', gid:'1290484217' },
-  { name:'OCT 2025', gid:'1581923995' },
-  { name:'NOV 2025', gid:'777101920'  },
-  { name:'DEC 2025', gid:'19524325'   }
-  // ➕ ADD NEW MONTHS HERE:
-  // { name:'JAN 2026', gid:'PASTE_GID_HERE' },
-];
+// WASM604 PART B: data now comes from the WiseAir archive API (TimescaleDB).
+var API_BASE = 'https://168-144-76-214.sslip.io';
+var DEVICE_MAP = {
+  Power:                {device:'SJJ-U1-Power',                  key:'power'},
+  Total_Generated_Flow: {device:'Total Generated Flow',          key:'flow'},
+  U1_UAH_Flow:          {device:'U1-UAH Flow',                   key:'flow'},
+  U1_Murata_Hall:       {device:'U1-Murata Hall',                key:'flow'},
+  Sub_Header_Flow_Spg:  {device:'Sub Header Flow - Spg',         key:'flow'},
+  Blowroom_to_Prep:     {device:'Blowroom to Preparatory',       key:'flow'},
+  Kaesar_Outlet_Pres:   {device:'Kaesar Compressor Pressure',    key:'pressure'},
+  After_Oil_Sep_Pres:   {device:'Pressure After Oil Separator',  key:'pressure'},
+  Dew_Point:            {device:'Dew Point Sensor',              key:'dewpoint'},
+  PC_Unit_Flow:         {device:'PC Unit Flow',                  key:'flow'},
+  PC_Pressure:          {device:'Pressure Sensor U1-PC',         key:'pressure'},
+  PC_Enterance:         {device:'PC-Entrance',                   key:'flow'},
+  PC_LinkConer:         {device:'PC - LinkConer',                key:'flow'},
+  PC_Spinning:          {device:'PC-Spinning Flow',              key:'flow'},
+  PC_Blowroom_Prep:     {device:'PC-Blowroom & Preparatory flow', key:'flow'}
+};
+
+var ALL_SHEETS = [ { name:'Archive', gid:'' } ];
 
 // ═══════════════════════════════════════════════════════════════════
 //  COLUMN DEFINITIONS
@@ -416,60 +424,62 @@ function fetchSheet(sheet) {
 }
 
 function doFetch() {
-  document.getElementById('sync').textContent = '● Fetching...';
-  document.getElementById('sync').style.color = '#f59e0b';
-  document.getElementById('fixBanner').style.display = 'none';
-  document.getElementById('table').innerHTML =
-    '<div class="loading">⏳ Connecting to Google Sheets…' +
-    '<div style="font-size:11px;color:#aaa;margin-top:10px" id="progLabel">Starting…</div>' +
+  var sy=document.getElementById('sync');
+  sy.textContent='\u25CF Fetching...'; sy.style.color='#f59e0b';
+  document.getElementById('fixBanner').style.display='none';
+  document.getElementById('table').innerHTML=
+    '<div class="loading">\u23F3 Loading from WiseAir archive\u2026'+
+    '<div style="font-size:11px;color:#aaa;margin-top:10px" id="progLabel">Starting\u2026</div>'+
     '<div class="progress-bar"><div class="progress-fill" id="progFill" style="width:0%"></div></div></div>';
 
-  allData = []; sheetStat = {};
-  var total = ALL_SHEETS.length, done = 0;
+  var fromV=document.getElementById('from').value;
+  var toV=document.getElementById('to').value;
+  var toMs = toV ? new Date(toV+'T23:59:59').getTime() : Date.now();
+  var fromMs = fromV ? new Date(fromV).getTime() : (toMs - 7*86400000);
 
-  var promises = ALL_SHEETS.map(function(s){
-    return fetchSheet(s).then(function(rows){
-      done++;
-      var lbl = document.getElementById('progLabel');
-      var fill = document.getElementById('progFill');
-      if (lbl) lbl.textContent = 'Loaded: ' + s.name + ' (' + rows.length + ' rows)';
-      if (fill) fill.style.width = Math.round(done/total*100) + '%';
-      return { name:s.name, rows:rows };
-    });
-  });
+  var defs = COL_DEFS.filter(function(cd){ return DEVICE_MAP[cd.key]; });
+  var total = defs.length, done = 0;
+  allData=[]; sheetStat={};
 
-  Promise.all(promises).then(function(results){
-    var seen = {};
-    results.forEach(function(r){
-      r.rows.forEach(function(row){
-        var k = row._source + '_' + (row._ts ? row._ts.getTime() : Math.random());
-        if (!seen[k]) { seen[k]=true; allData.push(row); }
+  Promise.all(defs.map(function(cd){
+    var m = DEVICE_MAP[cd.key];
+    var url = API_BASE+'/history?device='+encodeURIComponent(m.device)+
+              '&keys='+encodeURIComponent(m.key)+'&from='+fromMs+'&to='+toMs+'&bucket=auto';
+    return fetch(url,{cache:'no-store'})
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      .then(function(j){ sheetStat[cd.key]='ok'; return {cd:cd, data:j.data||[]}; })
+      .catch(function(e){ sheetStat[cd.key]='fail:'+e.message; return {cd:cd, data:[]}; })
+      .then(function(res){
+        done++;
+        var lbl=document.getElementById('progLabel'), fill=document.getElementById('progFill');
+        if(lbl) lbl.textContent='Loaded: '+cd.label+' ('+res.data.length+' points)';
+        if(fill) fill.style.width=Math.round(done/total*100)+'%';
+        return res;
+      });
+  })).then(function(results){
+    var byTs={};
+    results.forEach(function(res){
+      res.data.forEach(function(p){
+        var t=Math.round(p.ts/60000)*60000;
+        var row=byTs[t];
+        if(!row){ row=byTs[t]={_source:'Archive', _ts:new Date(t)};
+          COL_DEFS.forEach(function(c){ row[c.key]=null; }); }
+        if(p.value!==null && p.value!==undefined) row[res.cd.key]=p.value;
       });
     });
-    allData.sort(function(a,b){ return (a._ts||0)-(b._ts||0); });
+    allData=Object.keys(byTs).map(function(k){ return byTs[k]; });
+    allData.sort(function(a,b){ return a._ts-b._ts; });
 
-    var fails = Object.keys(sheetStat).filter(function(k){ return sheetStat[k].startsWith('fail'); });
-    var oks   = Object.keys(sheetStat).filter(function(k){ return sheetStat[k]==='ok'; });
-
-    if (allData.length === 0) {
-      document.getElementById('fixBanner').style.display = 'block';
-      document.getElementById('bannerTitle').textContent =
-        '⚠️ No data loaded — ' + fails.length + ' sheet(s) failed. Make sheet public (steps below):';
-      renderChips();
-      document.getElementById('sync').textContent = '● Failed — no data';
-      document.getElementById('sync').style.color = '#ef4444';
-      document.getElementById('table').innerHTML =
-        '<div class="loading" style="color:#ef4444">❌ No data. Make your Google Sheet public — see orange banner above.</div>';
+    var fails=Object.keys(sheetStat).filter(function(k){return sheetStat[k].indexOf('fail')===0;});
+    if(allData.length===0){
+      document.getElementById('sync').textContent='\u25CF No data in range';
+      document.getElementById('sync').style.color='#ef4444';
+      document.getElementById('table').innerHTML=
+        '<div class="loading" style="color:#ef4444">No data for the selected date range.</div>';
     } else {
-      document.getElementById('sync').textContent =
-        '● Synced · ' + allData.length + ' rows · ' + oks.length + '/' + total + ' sheets OK';
-      document.getElementById('sync').style.color = fails.length===0 ? '#22c55e' : '#f59e0b';
-      if (fails.length > 0) {
-        document.getElementById('fixBanner').style.display = 'block';
-        document.getElementById('bannerTitle').textContent =
-          '⚠️ ' + fails.length + ' sheet(s) failed. Data may be partial.';
-        renderChips();
-      }
+      document.getElementById('sync').textContent=
+        '\u25CF Synced \u00B7 '+allData.length+' rows \u00B7 WiseAir archive';
+      document.getElementById('sync').style.color=fails.length===0?'#22c55e':'#f59e0b';
     }
     buildSheetTabs(); buildCards(); buildParamButtons(); applyFilters();
   });
@@ -629,12 +639,12 @@ function applyQuickRange(){
   var v=document.getElementById('qr').value;
   if(!v||v==='all'){
     document.getElementById('from').value=''; document.getElementById('to').value='';
-    if(allData.length) applyFilters(); return;
+    doFetch(); return;
   }
   var to=new Date(),fr=new Date(); fr.setDate(fr.getDate()-parseInt(v));
   document.getElementById('to').value=to.toISOString().split('T')[0];
   document.getElementById('from').value=fr.toISOString().split('T')[0];
-  if(allData.length) applyFilters();
+  doFetch();
 }
 
 function doReset(){
@@ -801,6 +811,11 @@ function doExport(){
 // ═══════════════════════════════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════════════════════════════
+(function(){
+  var to=new Date(), fr=new Date(); fr.setDate(fr.getDate()-7);
+  document.getElementById('to').value=to.toISOString().split('T')[0];
+  document.getElementById('from').value=fr.toISOString().split('T')[0];
+})();
 buildSheetTabs(); buildCards(); buildParamButtons(); doFetch();
 </script>
 </body>
